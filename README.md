@@ -31,13 +31,13 @@ El sistema se compone de **dos ESP32** que se comunican por una red WiFi propia
 
 | Archivo | Descripcion |
 |---|---|
-| `main.py` | Firmware de la **controladora** (MicroPython). Contiene la pagina web embebida (`HTML_PAGE`), el servidor HTTP, la interfaz UDP y toda la logica de motores/sensor. |
-| `mpu6050.py` | Driver I2C minimo del sensor MPU-6050 / GY-521 (acelerometro + giroscopio + temperatura). |
-| `ESP32_Seismic_Dashboard.ino` | Firmware del **dashboard** (Arduino/C++). Pantalla TFT con LovyanGFX que rota entre vistas de estado y sensor. |
-| `index.html` | Copia suelta de la interfaz web (preview de diseno). **El firmware no la usa**: la fuente de verdad es `HTML_PAGE` dentro de `main.py`. |
-| `firmware_controladora.md` | Documentacion general de `main.py` (red, API, hardware, logica). |
-| `firmware_controladora_funciones.md` | Referencia funcion por funcion de `main.py`. |
-| `hardware_pinout_esp32.md`, `hardware_conexion_puente_h.md` | Notas de hardware, pinout y cableado de los puentes H. |
+| [`main.py`](main.py) | Firmware de la **controladora** (MicroPython). Contiene la pagina web embebida (`HTML_PAGE`), el servidor HTTP, la interfaz UDP y toda la logica de motores/sensor. |
+| [`mpu6050.py`](mpu6050.py) | Driver I2C minimo del sensor MPU-6050 / GY-521 (acelerometro + giroscopio + temperatura). |
+| [`ESP32_Seismic_Dashboard.ino`](ESP32_Seismic_Dashboard.ino) | Firmware del **dashboard** (Arduino/C++). Pantalla TFT con LovyanGFX que rota entre vistas de estado y sensor. |
+| [`index.html`](index.html) | Copia suelta de la interfaz web (preview de diseno). **El firmware no la usa**: la fuente de verdad es `HTML_PAGE` dentro de `main.py`. |
+| [`firmware_controladora.md`](firmware_controladora.md) | Documentacion general de `main.py` (red, API, hardware, logica). |
+| [`firmware_controladora_funciones.md`](firmware_controladora_funciones.md) | Referencia funcion por funcion de `main.py`. |
+| [`hardware_pinout_esp32.md`](hardware_pinout_esp32.md), [`hardware_conexion_puente_h.md`](hardware_conexion_puente_h.md) | Notas de hardware, pinout y cableado de los puentes H. |
 
 ---
 
@@ -45,8 +45,9 @@ El sistema se compone de **dos ESP32** que se comunican por una red WiFi propia
 
 ESP32 con MicroPython que funciona como **Access Point**: no necesita router ni internet.
 
-> Documentacion a fondo: **`firmware_controladora.md`** (red, API, protocolo UDP y logica
-> de sismo/sensor en detalle) y **`firmware_controladora_funciones.md`** (referencia de
+> Documentacion a fondo: **[`firmware_controladora.md`](firmware_controladora.md)** (red, API,
+> protocolo UDP y logica de sismo/sensor en detalle) y
+> **[`firmware_controladora_funciones.md`](firmware_controladora_funciones.md)** (referencia de
 > cada funcion de `main.py`).
 
 ### Puesta en marcha
@@ -118,9 +119,10 @@ El puente H 3 lleva `"reverse": True` para que sus motores giren en el mismo sen
 que los puentes 1 y 2. Los motores se alimentan **desde la fuente de 5V a traves del puente H**,
 nunca directo desde los GPIO.
 
-> Pinout completo de la ESP32 y diagramas de conexion en **`hardware_pinout_esp32.md`**.
-> Guia paso a paso del cableado motores ↔ puente H (alimentacion, GND comun, jumper +5V
-> y problemas comunes) en **`hardware_conexion_puente_h.md`**.
+> Pinout completo de la ESP32 y diagramas de conexion en
+> **[`hardware_pinout_esp32.md`](hardware_pinout_esp32.md)**. Guia paso a paso del cableado
+> motores ↔ puente H (alimentacion, GND comun, jumper +5V y problemas comunes) en
+> **[`hardware_conexion_puente_h.md`](hardware_conexion_puente_h.md)**.
 
 ---
 
@@ -217,7 +219,7 @@ El resto de campos que el dashboard tolera (`acc`, `gyr`, `ax/ay/az`, etc.) ya t
 
 ## Documentacion adicional
 
-- `firmware_controladora.md` — vision general de la controladora.
-- `firmware_controladora_funciones.md` — referencia detallada de cada funcion de `main.py`.
-- `hardware_conexion_puente_h.md` — cableado de los puentes H L298N.
-- `hardware_pinout_esp32.md` — pinout de la ESP32 y notas de cambios de hardware.
+- [`firmware_controladora.md`](firmware_controladora.md) — vision general de la controladora.
+- [`firmware_controladora_funciones.md`](firmware_controladora_funciones.md) — referencia detallada de cada funcion de `main.py`.
+- [`hardware_conexion_puente_h.md`](hardware_conexion_puente_h.md) — cableado de los puentes H L298N.
+- [`hardware_pinout_esp32.md`](hardware_pinout_esp32.md) — pinout de la ESP32 y notas de cambios de hardware.
