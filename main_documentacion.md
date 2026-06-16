@@ -6,6 +6,10 @@
 
 La interfaz esta pensada para controlar motores, iniciar o detener el terremoto, aplicar velocidades predefinidas y consultar el estado de la maqueta.
 
+> Este documento cubre la **controladora**. Para la vision del sistema completo (incluido el
+> **dashboard** en una segunda ESP32 con pantalla TFT, `ESP32_Seismic_Dashboard.ino`) ver
+> `README.md`. Para el detalle funcion por funcion ver `main_funciones.md`.
+
 ## Red WiFi
 
 El ESP32 funciona como Access Point, por lo que no necesita router ni internet.
@@ -35,7 +39,7 @@ Rutas disponibles:
 
 | Ruta | Metodo | Funcion |
 |---|---|---|
-| `/` | `GET` | Entrega la pagina HTML de control |
+| `/` | `GET` | Sirve la pagina de control HTML embebida (`HTML_PAGE`) |
 | `/api/status` | `GET` | Devuelve estado de la maqueta en JSON |
 | `/api/debug` | `GET` | Devuelve diagnostico (sensor, WiFi, memoria, uptime, sensor crudo) en JSON |
 | `/api/control` | `POST` | Recibe comandos desde la interfaz web |
@@ -45,13 +49,16 @@ Todas las respuestas incluyen la cabecera `Access-Control-Allow-Origin: *`.
 
 ## Interfaz HTML
 
-La pagina esta embebida en la variable:
+La pagina de control esta **embebida en `main.py`** como la constante `HTML_PAGE`
+(HTML + CSS + JS en una sola cadena). La ruta `GET /` la entrega con
+`send_response()` y `Content-Type: text/html`.
 
-```python
-HTML_PAGE
-```
+> Nota: en la carpeta del proyecto existe tambien un `index.html` suelto, pero el
+> firmware **no lo usa**: la fuente de verdad de la pagina es `HTML_PAGE` dentro de
+> `main.py`. (Si en el futuro se sirve el fichero por streaming, habria que subir
+> `index.html` a la placa y cambiar `GET /` para leerlo.)
 
-El diseno incorporado esta basado en `preview_gemini.html`. Incluye:
+La pagina incluye:
 
 - Boton principal para iniciar o detener el terremoto.
 - Timer de duracion del terremoto.
@@ -135,7 +142,10 @@ Toda la electronica esta cableada a **una sola ESP32**:
 - **Sensor MPU-6050 / GY-521** (giroscopio + acelerometro 3 ejes) por I2C.
 
 > Nota: el firmware actual (`main.py`) **no controla ninguna pantalla TFT**. El control
-> y el monitoreo se hacen integramente desde la interfaz web servida por el ESP32.
+> y el monitoreo desde el navegador se hacen integramente desde la interfaz web servida por
+> este ESP32. La pantalla TFT vive en una **segunda ESP32** independiente (el dashboard
+> `ESP32_Seismic_Dashboard.ino`), que solo escucha la difusion multicast del sensor. Ver
+> `README.md` para la vision del sistema completo.
 
 ### Pinout actual
 
@@ -178,6 +188,12 @@ La velocidad se maneja como porcentaje de `0` a `100` y se convierte a duty cycl
 duty = speed * 1023 / 100
 ```
 
+La escritura del duty se adapta a la API del port de MicroPython (`duty()` de
+0-1023 o `duty_u16()` de 16 bits) con `try/except`. No hay un helper unico:
+`init_actuators` usa una funcion interna `_set_pwm_duty()` para ese fallback,
+`set_motor_speed` repite el `try/except` en linea, y `start_quake`/`stop_quake`
+escriben con `pwm.duty()` directamente.
+
 Importante: los motores se alimentan desde la fuente de 5V a traves del puente H,
 **nunca** directamente desde los GPIO del ESP32. Los GPIO solo llevan PWM (ENA) y
 direccion (IN1/IN2) a la logica del puente.
@@ -192,8 +208,18 @@ maquina-a-maquina con el **mismo esquema JSON**:
   Cualquier dispositivo de la red `ESP32-Control` puede enviar un comando JSON
   identico al de `POST /api/control`. La ESP32 responde por unicast con el estado.
 - **Multicast (difusion del sensor)**: la ESP32 publica el estado completo
-  (incluido el giroscopio) en el grupo `224.1.1.10:5005` cada 500 ms. Varios
-  receptores pueden suscribirse a la vez.
+  (`status_payload()`: `running`, `motors` como array `[m1,m2,m3]`, `accel`,
+  `gyro_axes`, `gyro`, `temp`, ...) en el grupo `224.1.1.10:5005`. Varios
+  receptores pueden suscribirse a la vez; la ESP32 visualizadora (dashboard
+  `ESP32_Seismic_Dashboard.ino`) consume este mismo JSON para dibujar barras de
+  motores y los ejes del sensor.
+
+> **Nombres de campo con el dashboard:** el dashboard lee las claves tal como las
+> emite `status_payload()` (`running`, `elapsed_seconds`, `accel`, `gyro_axes`,
+> `motors`, y tambien `gyro`, `last_command` y `temp`). Estos tres ultimos usaban
+> antes nombres distintos en el `.ino` (`gyro_value` / `preset` / `temperature`),
+> que ahora se conservan solo como fallback en `parseJSON()`. Ver el detalle en
+> `README.md`.
 
 ```python
 CMD_PORT = 5006          # unicast: comandos a motores
@@ -230,7 +256,7 @@ UDP (puerto 5006), y ejecuta tareas por tiempo:
 
 - Leer el sensor (`update_gyro()`) cada `SENSOR_MS` = 100 ms.
 - Mantener el "light boost" (`update_light_boost()`) en cada vuelta.
-- Difundir el estado por multicast (`send_sensor_multicast()`) cada `MCAST_MS` = 500 ms,
+- Difundir el estado por multicast (`send_sensor_multicast()`) cada `MCAST_MS` = 200 ms,
   seguido de `gc.collect()`.
 
 El timeout del poll es `SCHED_POLL_MS` = 50 ms.
@@ -295,13 +321,22 @@ de modo que la app sigue funcionando.
   "accel": { "x": 0.012, "y": -0.004, "z": 1.001 },
   "gyro_axes": { "x": 1.23, "y": -0.45, "z": 0.07 },
   "temp": 29.4,
-  "motors": {
-    "1": 65,
-    "2": 65,
-    "3": 65
-  }
+  "motors": [65, 65, 65]
 }
 ```
+
+> **Formato de `motors` (importante):** en el **estado saliente** (respuesta de
+> `/api/status`, `/api/control`, unicast UDP y difusion multicast) `motors` es un
+> **array `[m1, m2, m3]`**, construido por el helper `motors_list()`. Se eligio
+> array — y no el dict `motor_speeds` — porque la **ESP32 receptora/visualizadora**
+> parsea `doc["motors"]` como `JsonArray`; un objeto `{"1":..}` le llegaria como
+> `null` y no pintaria las barras de motores. El indice del array mapea a los
+> canales `[Puente H 1, Puente H 2, Puente H 3]`, es decir las etiquetas
+> `M1-2 / M3-4 / M5-6` del receptor.
+>
+> En cambio, en los **comandos entrantes** (`POST /api/control` y unicast) `motors`
+> puede venir como objeto `{"1":50,"2":50,"3":50}`; `apply_motor_payload()` acepta
+> ese dict. El web UI lee ambos formatos via el helper `readMotor()`.
 
 La interfaz usa estos datos para actualizar el timer, el estado, la intensidad, los
 ejes de aceleracion/giro, la temperatura y las velocidades.
