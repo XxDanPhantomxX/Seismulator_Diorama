@@ -2,7 +2,7 @@
 
 Documento de referencia detallado de **cada funcion** del firmware `main.py`
 (ESP32 + MicroPython, simulador de sismos "Seismulator"). Para la vision general
-del proyecto (red WiFi, API, hardware) ver `main_documentacion.md`; aqui el foco
+del proyecto (red WiFi, API, hardware) ver `firmware_controladora.md`; aqui el foco
 es **que hace cada funcion, sus parametros, lo que devuelve y sus efectos**.
 
 ---

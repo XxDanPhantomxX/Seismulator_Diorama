@@ -25,8 +25,8 @@ Resume **lo nuevo**, los archivos afectados y el **diagrama de conexion pin por 
 |---|---|---|
 | `mpu6050.py` | **Nuevo** | Driver I2C minimalista del MPU-6050 (accel + giro + temperatura) |
 | `main.py` | **Modificado** | Puentes H, lectura de sensor real, modal Debug, bucle de eventos + UDP |
-| `main_documentacion.md` | **Modificado** | Hardware, pinout, protocolo UDP y giroscopio real |
-| `actualizacion_hardware.md` | **Nuevo** | Este documento |
+| `firmware_controladora.md` | **Modificado** | Hardware, pinout, protocolo UDP y giroscopio real |
+| `hardware_pinout_esp32.md` | **Nuevo** | Este documento |
 
 ### Detalle funcional nuevo
 

@@ -35,9 +35,9 @@ El sistema se compone de **dos ESP32** que se comunican por una red WiFi propia
 | `mpu6050.py` | Driver I2C minimo del sensor MPU-6050 / GY-521 (acelerometro + giroscopio + temperatura). |
 | `ESP32_Seismic_Dashboard.ino` | Firmware del **dashboard** (Arduino/C++). Pantalla TFT con LovyanGFX que rota entre vistas de estado y sensor. |
 | `index.html` | Copia suelta de la interfaz web (preview de diseno). **El firmware no la usa**: la fuente de verdad es `HTML_PAGE` dentro de `main.py`. |
-| `main_documentacion.md` | Documentacion general de `main.py` (red, API, hardware, logica). |
-| `main_funciones.md` | Referencia funcion por funcion de `main.py`. |
-| `actualizacion_hardware.md`, `conexion_motores_puente_h.md` | Notas de hardware y cableado de los puentes H. |
+| `firmware_controladora.md` | Documentacion general de `main.py` (red, API, hardware, logica). |
+| `firmware_controladora_funciones.md` | Referencia funcion por funcion de `main.py`. |
+| `hardware_pinout_esp32.md`, `hardware_conexion_puente_h.md` | Notas de hardware, pinout y cableado de los puentes H. |
 
 ---
 
@@ -112,7 +112,7 @@ Todas las respuestas llevan `Access-Control-Allow-Origin: *`.
 
 El puente H 3 lleva `"reverse": True` para que sus motores giren en el mismo sentido fisico
 que los puentes 1 y 2. Los motores se alimentan **desde la fuente de 5V a traves del puente H**,
-nunca directo desde los GPIO. Detalles en `main_documentacion.md` y `conexion_motores_puente_h.md`.
+nunca directo desde los GPIO. Detalles en `firmware_controladora.md` y `hardware_conexion_puente_h.md`.
 
 ---
 
@@ -209,9 +209,9 @@ El resto de campos que el dashboard tolera (`acc`, `gyr`, `ax/ay/az`, etc.) ya t
 
 ## Documentacion adicional
 
-- `main_documentacion.md` — vision general de la controladora.
-- `main_funciones.md` — referencia detallada de cada funcion de `main.py`.
-- `conexion_motores_puente_h.md` — cableado de los puentes H L298N.
-- `actualizacion_hardware.md` — notas de cambios de hardware.
+- `firmware_controladora.md` — vision general de la controladora.
+- `firmware_controladora_funciones.md` — referencia detallada de cada funcion de `main.py`.
+- `hardware_conexion_puente_h.md` — cableado de los puentes H L298N.
+- `hardware_pinout_esp32.md` — pinout de la ESP32 y notas de cambios de hardware.
 </content>
 </invoke>

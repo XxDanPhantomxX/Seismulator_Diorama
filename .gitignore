@@ -1,0 +1,5 @@
+.claude
+-micropico
+.vscode
+__pycache__
+*.pyc

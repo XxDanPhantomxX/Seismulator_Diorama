@@ -8,7 +8,7 @@ La interfaz esta pensada para controlar motores, iniciar o detener el terremoto,
 
 > Este documento cubre la **controladora**. Para la vision del sistema completo (incluido el
 > **dashboard** en una segunda ESP32 con pantalla TFT, `ESP32_Seismic_Dashboard.ino`) ver
-> `README.md`. Para el detalle funcion por funcion ver `main_funciones.md`.
+> `README.md`. Para el detalle funcion por funcion ver `firmware_controladora_funciones.md`.
 
 ## Red WiFi
 
