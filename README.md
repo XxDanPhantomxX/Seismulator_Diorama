@@ -45,6 +45,10 @@ El sistema se compone de **dos ESP32** que se comunican por una red WiFi propia
 
 ESP32 con MicroPython que funciona como **Access Point**: no necesita router ni internet.
 
+> Documentacion a fondo: **`firmware_controladora.md`** (red, API, protocolo UDP y logica
+> de sismo/sensor en detalle) y **`firmware_controladora_funciones.md`** (referencia de
+> cada funcion de `main.py`).
+
 ### Puesta en marcha
 
 1. Sube `main.py` y `mpu6050.py` a la placa (Thonny, `mpremote`, etc.).
@@ -112,7 +116,11 @@ Todas las respuestas llevan `Access-Control-Allow-Origin: *`.
 
 El puente H 3 lleva `"reverse": True` para que sus motores giren en el mismo sentido fisico
 que los puentes 1 y 2. Los motores se alimentan **desde la fuente de 5V a traves del puente H**,
-nunca directo desde los GPIO. Detalles en `firmware_controladora.md` y `hardware_conexion_puente_h.md`.
+nunca directo desde los GPIO.
+
+> Pinout completo de la ESP32 y diagramas de conexion en **`hardware_pinout_esp32.md`**.
+> Guia paso a paso del cableado motores ↔ puente H (alimentacion, GND comun, jumper +5V
+> y problemas comunes) en **`hardware_conexion_puente_h.md`**.
 
 ---
 
@@ -213,5 +221,3 @@ El resto de campos que el dashboard tolera (`acc`, `gyr`, `ax/ay/az`, etc.) ya t
 - `firmware_controladora_funciones.md` — referencia detallada de cada funcion de `main.py`.
 - `hardware_conexion_puente_h.md` — cableado de los puentes H L298N.
 - `hardware_pinout_esp32.md` — pinout de la ESP32 y notas de cambios de hardware.
-</content>
-</invoke>
