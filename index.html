@@ -676,6 +676,12 @@
         if (typeof data.temp === "number") sensorData.temp = data.temp;
       }
 
+      // motors puede llegar como array [m1,m2,m3] (nuevo) u objeto {1,2,3} (compat)
+      function readMotor(motors, m) {
+        if (Array.isArray(motors)) return motors[m - 1] ?? speeds[m];
+        return motors[m] ?? motors[String(m)] ?? speeds[m];
+      }
+
       function formatTime(totalSeconds) {
         const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
         const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -869,7 +875,7 @@
           const data = await response.json();
           modalConnection.textContent = "ESP32 Conectada";
           if (data.motors) {
-            [1, 2, 3].forEach((m) => setMotorSpeed(m, data.motors[m] ?? data.motors[String(m)] ?? speeds[m]));
+            [1, 2, 3].forEach((m) => setMotorSpeed(m, readMotor(data.motors, m)));
           }
           if (typeof data.gyro === "number") {
             currentGyroValue = data.gyro;
@@ -938,7 +944,7 @@
             lastSentCommand = data.last_command;
           }
           if (data.motors) {
-            [1, 2, 3].forEach((m) => setMotorSpeed(m, data.motors[m] ?? data.motors[String(m)] ?? speeds[m]));
+            [1, 2, 3].forEach((m) => setMotorSpeed(m, readMotor(data.motors, m)));
           }
           storeSensorData(data);
           updateLiveModalData();

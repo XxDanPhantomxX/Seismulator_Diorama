@@ -110,6 +110,13 @@ uint32_t lastDemo       = 0;
 uint32_t lastRSSI       = 0;
 float    demoPhase      = 0.0f;
 
+// ── Snapshot de lo dibujado en SCR_STATUS (deteccion de cambios anti-parpadeo) ──
+bool     lastValid      = false;
+bool     lastRunning    = false;
+int      lastMotor[3]   = {-1, -1, -1};
+int      lastElapsed    = -1;
+String   lastCmdDrawn   = "";
+
 // ── Red ───────────────────────────────────────────────────────────────
 String   localIP = "---";
 int32_t  rssi    = 0;
@@ -218,6 +225,22 @@ void loop()
   updateDemoData();
 #else
   readUDP();
+
+  // 1b. Anti-parpadeo: en la pantalla de estado solo se redibuja si cambia el
+  //     contenido visible (estado, tiempo, motores a 0% si parado, comando).
+  //     La pantalla de sensor se refresca al ritmo de la grafica (paso 2).
+  if (curScreen == SCR_STATUS) {
+    int e  = (int)data.elapsed_sec;
+    int m0 = data.running ? data.motor[0] : 0;
+    int m1 = data.running ? data.motor[1] : 0;
+    int m2 = data.running ? data.motor[2] : 0;
+    if (data.valid != lastValid || data.running != lastRunning ||
+        e != lastElapsed ||
+        m0 != lastMotor[0] || m1 != lastMotor[1] || m2 != lastMotor[2] ||
+        data.last_cmd != lastCmdDrawn) {
+      needRedraw = true;
+    }
+  }
 #endif
 
   // 2. Muestra de grafica cada GRAPH_INTERVAL ms
@@ -402,9 +425,11 @@ void readUDP()
 #if UDP_DEBUG
     Serial.printf("[UDP %d bytes] %s\n", len, buf);
 #endif
-    if (parseJSON(buf)) needRedraw = true;
+    // No se fuerza el redibujo aqui: loop() decide segun la pantalla y si
+    // cambio el contenido visible, para no parpadear con cada paquete (5 Hz).
+    bool ok = parseJSON(buf);
 #if UDP_DEBUG
-    else Serial.println("[UDP] JSON invalido o no parseable");
+    if (!ok) Serial.println("[UDP] JSON invalido o no parseable");
 #endif
   }
 }
@@ -520,17 +545,23 @@ void drawStatus()
   int bw=58, bh=66, by=92, sp=100;
 
   for (int i = 0; i < 3; i++) {
+    // Sin sismo activo el PWM real es 0, asi que las barras se muestran a 0%
+    // (la controladora difunde la velocidad objetivo ~50% aunque este parada).
+    int mval = data.running ? data.motor[i] : 0;
+
     int bx = 20 + i * sp;
     cv().drawRect(bx, by, bw, bh, C_GRAY);
-    drawVBar(bx+1, by+1, bw-2, bh-2, data.motor[i]/100.0f, mcol[i]);
+    drawVBar(bx+1, by+1, bw-2, bh-2, mval/100.0f, mcol[i]);
 
     cv().setTextColor(mcol[i]); cv().setTextSize(1);
     cv().setTextDatum(lgfx::middle_center);
     cv().drawString(lbl[i], bx+bw/2, by+bh+6);
 
-    char pb[8]; snprintf(pb,sizeof(pb),"%d%%",data.motor[i]);
+    char pb[8]; snprintf(pb,sizeof(pb),"%d%%",mval);
     cv().setTextColor(C_WHITE); cv().setTextSize(2);
     cv().drawString(pb, bx+bw/2, by+bh+18);
+
+    lastMotor[i] = mval;   // snapshot para la deteccion de cambios (anti-parpadeo)
   }
   cv().setTextDatum(lgfx::top_left);
 
@@ -540,6 +571,13 @@ void drawStatus()
   cv().drawString("ULTIMO PRESET / COMANDO:", 10, 195);
   cv().setTextColor(C_CYAN); cv().setTextSize(2);
   cv().drawString(data.last_cmd.c_str(), 10, 205);
+
+  // Snapshot del contenido dibujado (anti-parpadeo): loop() solo vuelve a
+  // redibujar esta pantalla si alguno de estos valores cambia.
+  lastValid    = data.valid;
+  lastRunning  = data.running;
+  lastElapsed  = (int)data.elapsed_sec;
+  lastCmdDrawn = data.last_cmd;
 }
 
 // =====================================================================

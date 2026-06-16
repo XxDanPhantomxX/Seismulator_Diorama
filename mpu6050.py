@@ -26,8 +26,19 @@ class MPU6050:
     def __init__(self, i2c, addr=0x68):
         self.i2c = i2c
         self.addr = addr
+        self._default_addr = addr
         self.present = False
-        candidates = (addr, 0x68, 0x69)
+        self.reinit()
+
+    def reinit(self):
+        """(Re)detecta y configura el sensor por I2C.
+
+        Se puede llamar tantas veces como haga falta: sirve tanto para la
+        deteccion inicial como para recuperar el sensor tras un fallo de lectura
+        transitorio (sin tener que reiniciar la placa). Deja `self.present` en
+        True/False y devuelve ese valor.
+        """
+        candidates = (self.addr, self._default_addr, 0x68, 0x69)
         seen = set()
 
         for candidate in candidates:
@@ -48,9 +59,11 @@ class MPU6050:
                 self.i2c.writeto_mem(candidate, _GYRO_CONFIG, b"\x00")
                 self.addr = candidate
                 self.present = True
-                break
+                return True
             except Exception:
                 self.present = False
+
+        return False
 
     def _read3(self, reg):
         data = self.i2c.readfrom_mem(self.addr, reg, 6)

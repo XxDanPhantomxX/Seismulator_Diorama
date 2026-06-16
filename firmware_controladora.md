@@ -39,7 +39,7 @@ Rutas disponibles:
 
 | Ruta | Metodo | Funcion |
 |---|---|---|
-| `/` | `GET` | Sirve la pagina de control HTML embebida (`HTML_PAGE`) |
+| `/` | `GET` | Sirve la pagina de control (`index.html`) por streaming; `404` si falta el archivo |
 | `/api/status` | `GET` | Devuelve estado de la maqueta en JSON |
 | `/api/debug` | `GET` | Devuelve diagnostico (sensor, WiFi, memoria, uptime, sensor crudo) en JSON |
 | `/api/control` | `POST` | Recibe comandos desde la interfaz web |
@@ -49,14 +49,15 @@ Todas las respuestas incluyen la cabecera `Access-Control-Allow-Origin: *`.
 
 ## Interfaz HTML
 
-La pagina de control esta **embebida en `main.py`** como la constante `HTML_PAGE`
-(HTML + CSS + JS en una sola cadena). La ruta `GET /` la entrega con
-`send_response()` y `Content-Type: text/html`.
+La pagina de control (HTML + CSS + JS) vive en el archivo **`index.html`**, que se
+sube al sistema de ficheros de la placa junto a `main.py`. La ruta `GET /` lo sirve
+con `send_file()`, que lo envia **por streaming en bloques de `HTTP_CHUNK` (512) bytes**
+sin cargarlo entero en RAM. El nombre del archivo es configurable en la constante
+`INDEX_HTML`.
 
-> Nota: en la carpeta del proyecto existe tambien un `index.html` suelto, pero el
-> firmware **no lo usa**: la fuente de verdad de la pagina es `HTML_PAGE` dentro de
-> `main.py`. (Si en el futuro se sirve el fichero por streaming, habria que subir
-> `index.html` a la placa y cambiar `GET /` para leerlo.)
+> Importante: hay que **subir `index.html` a la placa**. Si el archivo no existe,
+> `send_file()` responde `404` y la web no carga (el resto de la API HTTP/UDP sigue
+> funcionando). El `index.html` del repo es la fuente de verdad de la UI.
 
 La pagina incluye:
 
@@ -189,10 +190,11 @@ duty = speed * 1023 / 100
 ```
 
 La escritura del duty se adapta a la API del port de MicroPython (`duty()` de
-0-1023 o `duty_u16()` de 16 bits) con `try/except`. No hay un helper unico:
-`init_actuators` usa una funcion interna `_set_pwm_duty()` para ese fallback,
-`set_motor_speed` repite el `try/except` en linea, y `start_quake`/`stop_quake`
-escriben con `pwm.duty()` directamente.
+0-1023 o `duty_u16()` de 16 bits). La deteccion se hace **una sola vez** en
+`init_actuators` (con `hasattr(pwm, "duty")`) y fija el global `_pwm_write` al
+escritor adecuado (`_pwm_write_duty` o `_pwm_write_u16`). A partir de ahi todas
+las escrituras (`set_motor_speed`, `start_quake`, `stop_quake`) llaman a
+`_pwm_write(pwm, duty)` directo, sin `try/except` en el camino caliente.
 
 Importante: los motores se alimentan desde la fuente de 5V a traves del puente H,
 **nunca** directamente desde los GPIO del ESP32. Los GPIO solo llevan PWM (ENA) y
@@ -306,6 +308,15 @@ sensor que despues se publican en el estado:
 Si el sensor no responde (no detectado en I2C o error de lectura), cae
 automaticamente a la estimacion por velocidad promedio (`update_gyro_estimate()`),
 de modo que la app sigue funcionando.
+
+### Recuperacion del sensor (no se queda "No detectado")
+
+Un fallo de lectura marca `sensor.present = False`, **pero no de forma permanente**:
+mientras el sensor figure como ausente, `update_gyro()` reintenta detectarlo con
+`sensor.reinit()` cada `SENSOR_RETRY_MS` (2 s). Asi, si el MPU-6050 no estaba listo
+en el primer sondeo al arrancar o hubo un glitch I2C puntual, el sensor se recupera
+solo y `GET /api/debug` vuelve a reportar `sensor_present: true` sin reiniciar la placa.
+El throttle de 2 s evita inundar el bus I2C cuando de verdad no hay sensor conectado.
 
 ## Respuesta de estado
 

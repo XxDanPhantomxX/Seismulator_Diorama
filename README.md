@@ -31,10 +31,10 @@ El sistema se compone de **dos ESP32** que se comunican por una red WiFi propia
 
 | Archivo | Descripcion |
 |---|---|
-| [`main.py`](main.py) | Firmware de la **controladora** (MicroPython). Contiene la pagina web embebida (`HTML_PAGE`), el servidor HTTP, la interfaz UDP y toda la logica de motores/sensor. |
+| [`main.py`](main.py) | Firmware de la **controladora** (MicroPython). Servidor HTTP, interfaz UDP y toda la logica de motores/sensor. Sirve `index.html` por streaming en `GET /`. |
 | [`mpu6050.py`](mpu6050.py) | Driver I2C minimo del sensor MPU-6050 / GY-521 (acelerometro + giroscopio + temperatura). |
 | [`ESP32_Seismic_Dashboard.ino`](ESP32_Seismic_Dashboard.ino) | Firmware del **dashboard** (Arduino/C++). Pantalla TFT con LovyanGFX que rota entre vistas de estado y sensor. |
-| [`index.html`](index.html) | Copia suelta de la interfaz web (preview de diseno). **El firmware no la usa**: la fuente de verdad es `HTML_PAGE` dentro de `main.py`. |
+| [`index.html`](index.html) | Interfaz web de control. **La sirve el firmware** desde el sistema de ficheros de la placa; hay que subirla junto a `main.py`. |
 | [`firmware_controladora.md`](firmware_controladora.md) | Documentacion general de `main.py` (red, API, hardware, logica). |
 | [`firmware_controladora_funciones.md`](firmware_controladora_funciones.md) | Referencia funcion por funcion de `main.py`. |
 | [`hardware_pinout_esp32.md`](hardware_pinout_esp32.md), [`hardware_conexion_puente_h.md`](hardware_conexion_puente_h.md) | Notas de hardware, pinout y cableado de los puentes H. |
@@ -52,7 +52,9 @@ ESP32 con MicroPython que funciona como **Access Point**: no necesita router ni 
 
 ### Puesta en marcha
 
-1. Sube `main.py` y `mpu6050.py` a la placa (Thonny, `mpremote`, etc.).
+1. Sube `main.py`, `mpu6050.py` **e `index.html`** a la placa (Thonny, `mpremote`, etc.).
+   Los tres deben estar en la raiz del sistema de ficheros; `GET /` sirve `index.html`
+   por streaming, asi que sin ese archivo la web responde `404`.
 2. Reinicia: el `main()` arranca actuadores, sensor, AP y el bucle de eventos.
 3. Conecta tu celular o PC a la red WiFi:
    - **SSID:** `ESP32-Control`
@@ -63,7 +65,7 @@ ESP32 con MicroPython que funciona como **Access Point**: no necesita router ni 
 
 ### Interfaz web
 
-La pagina (embebida en `HTML_PAGE`) ofrece:
+La pagina (servida desde `index.html`) ofrece:
 
 - Boton principal **Iniciar / Detener** el sismo, con cronometro.
 - Presets de intensidad: **Ligero**, **Medio**, **Fuerte**.
@@ -156,9 +158,14 @@ sensor y la dibuja.
 - Se une al grupo **multicast `224.1.1.10:5005`** y parsea cada paquete JSON entrante.
 - **Modo automatico** (sin botones): rota entre 2 pantallas cada 10 s.
   - **Pantalla 1 — Estado:** banner `SEGURO / SISMO ACTIVO / SIN DATOS`, cronometro,
-    3 barras de motores (`M1-2`, `M3-4`, `M5-6`) y ultimo preset/comando.
+    3 barras de motores (`M1-2`, `M3-4`, `M5-6`) y ultimo preset/comando. Las barras
+    muestran **0% mientras no hay sismo activo** (`running == false`), ya que el PWM
+    real es 0 aunque la controladora difunda la velocidad objetivo.
   - **Pantalla 2 — Sensor:** valores numericos de accel/gyro/temp y 3 graficas de scroll
     (Ax, Ay, Az) con buffer circular de 80 muestras.
+- **Anti-parpadeo:** la pantalla de Estado solo se redibuja cuando cambia el contenido
+  visible (estado, tiempo, motores o comando), no en cada paquete UDP; el doble buffer
+  se hace con un sprite de pantalla completa.
 - **`DEMO_MODE true`** genera datos animados para probar la pantalla sin la controladora.
 
 ### Pinout TFT (configurado en la clase `LGFX`)

@@ -41,6 +41,7 @@ es **que hace cada funcion, sus parametros, lo que devuelve y sus efectos**.
   - [`parse_request`](#parse_requestclient)
   - [`send_all`](#send_allclient-data)
   - [`send_response`](#send_responseclient-status-content_type-body)
+  - [`send_file`](#send_fileclient-path-content_type)
   - [`handle_client`](#handle_clientclient)
   - [`make_http_server`](#make_http_server)
 - [Red UDP (unicast + multicast)](#red-udp-unicast--multicast)
@@ -102,20 +103,20 @@ de modulo. Muchas funciones leen/escriben estas variables con `global`.
 
 ### Escritura del duty PWM (compatibilidad de API)
 
-**No hay un helper unico** para escribir el duty: cada sitio que mueve motores se
-adapta a la API del port de MicroPython (`duty()` de 0-1023 o `duty_u16()` de 16
-bits) con `try/except`.
+**Hay un unico escritor resuelto una sola vez.** Distintos ports/versiones de
+MicroPython exponen distinta API de PWM (`duty()` de 0-1023 o `duty_u16()` de 16
+bits), asi que en lugar de un `try/except` por escritura se detecta la API al
+arrancar y se fija el global `_pwm_write`:
 
-- **`init_actuators`** define una funcion interna `_set_pwm_duty(p, v)` que intenta
-  `p.duty(int(v))` y, si falla, `p.duty_u16(int(v) * 64)`; la usa para dejar cada
-  PWM en `0` al arrancar.
-- **`set_motor_speed`** repite el mismo `try/except` en linea (`pwm.duty()` y, como
-  fallback, `pwm.duty_u16()`).
-- **`start_quake` / `stop_quake`** escriben directamente con `pwm.duty(...)` (sin
-  fallback).
+- **`_pwm_write_duty(pwm, duty_val)`** -> `pwm.duty(duty_val)` (rango 0-1023).
+- **`_pwm_write_u16(pwm, duty_val)`** -> `pwm.duty_u16(duty_val * 64)` (reescala
+  ~1023 a ~65472 para la variante de 16 bits).
+- **`_pwm_write`** (global) apunta a uno de los dos. Por defecto es `_pwm_write_duty`;
+  **`init_actuators`** lo reasigna una vez segun `hasattr(pwm, "duty")`.
 
-> Por que el fallback: distintos ports/versiones de MicroPython exponen distinta
-> API de PWM. El `* 64` reescala de ~1023 a ~65472 para la variante de 16 bits.
+Despues, **`init_actuators`**, **`set_motor_speed`**, **`start_quake`** y
+**`stop_quake`** llaman a `_pwm_write(pwm, duty)` directo, sin excepciones en el
+camino caliente.
 
 ### `init_actuators()`
 
@@ -130,7 +131,9 @@ arranque desde `main()`.
      - Con `"reverse": True` (puente 3): `IN1=0, IN2=1`, para que sus motores
        giren en el **mismo sentido fisico** que los otros dos.
   3. Crea el PWM sobre el pin `ena` a `PWM_FREQ`.
-  4. Llama a la funcion interna `_set_pwm_duty(pwm, 0)` para arrancar con velocidad cero.
+  4. Con el primer puente, detecta la API de PWM (`hasattr(pwm, "duty")`) y fija el
+     global `_pwm_write`. Luego llama a `_pwm_write(pwm, 0)` para arrancar con
+     velocidad cero.
   5. Guarda `{"pwm", "in1", "in2"}` en `bridges[bridge_id]`.
 - **Nota de hardware:** asume `ENA=ENB` e `IN1=IN3`, `IN2=IN4` en el modulo, de
   modo que los 2 motores de cada puente giran juntos a la misma velocidad.
@@ -168,7 +171,7 @@ esta activo.
   4. Calcula el duty: `duty_from_speed(speed)` **solo si `quake_running`**; si el
      sismo esta detenido aplica `0` (el motor no se mueve aunque se ajuste su
      "velocidad objetivo").
-  5. Escribe el duty con `pwm.duty()` (y `pwm.duty_u16()` como fallback, en un `try/except`).
+  5. Escribe el duty con `_pwm_write(pwm, duty_val)` (el escritor ya resuelto en `init_actuators`).
 - **Detalle clave:** ajustar la velocidad con el sismo parado **actualiza el
   valor objetivo pero no arranca el motor**; el valor se usara al hacer
   `start_quake`.
@@ -246,7 +249,11 @@ Lectura principal del sensor; **fuente de verdad** de `gyro_value`, `accel_xyz`,
 
 - **Devuelve:** nada. Escribe esos 4 globals.
 - **Comportamiento:**
-  1. Si hay sensor presente (`sensor.present`):
+  1. Si hay objeto `sensor` pero figura ausente (`not sensor.present`), reintenta
+     detectarlo con `sensor.reinit()` como mucho cada `SENSOR_RETRY_MS` (2 s,
+     mediante el global `sensor_retry_ms`). Asi un fallo puntual **no** deja el
+     sensor marcado "No detectado" de forma permanente.
+  2. Si hay sensor presente (`sensor.present`):
      - Lee aceleracion y giro; los redondea y guarda en `accel_xyz` / `gyro_xyz`.
      - Intenta leer temperatura (en un `try` propio: si falla, conserva la
        anterior).
@@ -257,9 +264,10 @@ Lectura principal del sensor; **fuente de verdad** de `gyro_value`, `accel_xyz`,
        `gyro_value = 0.6*gyro_value + 0.4*intensity`; si esta parado usa la
        intensidad cruda.
      - `return`.
-  2. Si la lectura lanza excepcion: imprime el error, marca
-     `sensor.present = False` (degrada a estimacion para futuras llamadas).
-  3. Si no hay sensor (o acaba de fallar), llama `update_gyro_estimate()`.
+  3. Si la lectura lanza excepcion: imprime el error y marca
+     `sensor.present = False` (en la siguiente llamada el paso 1 intentara
+     re-detectarlo; mientras tanto degrada a estimacion).
+  4. Si no hay sensor (o acaba de fallar), llama `update_gyro_estimate()`.
 - **Frecuencia:** se invoca cada `SENSOR_MS` en el bucle, y tambien antes de
   responder `/api/status` y `/api/debug`.
 
@@ -449,6 +457,24 @@ memoria** (JSON, texto).
   arma cabeceras con `Content-Length`, `Connection: close` y CORS
   (`Access-Control-Allow-Origin: *`), y envia cabeceras + cuerpo con `send_all`.
 
+### `send_file(client, path, content_type)`
+
+Sirve un **archivo del sistema de ficheros** por streaming, sin cargarlo entero en
+memoria (lo usa `GET /` para entregar `index.html`).
+
+- **Parametros:** `path` (ruta del archivo en la placa), `content_type`.
+- **Devuelve:** nada.
+- **Comportamiento:**
+  1. Obtiene el tamano con `os.stat(path)[6]`. Si el archivo no existe (`OSError`),
+     responde `404` con `send_response` y termina.
+  2. Envia las cabeceras (`200 OK`, `Content-Length` = tamano real, `Connection: close`,
+     CORS).
+  3. Abre el archivo en binario y lo envia en bloques de `HTTP_CHUNK` (512) bytes con
+     `send_all`, de modo que el pico de RAM no depende del tamano del archivo.
+- **Por que streaming:** evita mantener los ~31 KB de la UI como string en RAM; antes
+  la pagina estaba embebida en una constante `HTML_PAGE` que ocupaba memoria de forma
+  permanente.
+
 ### `handle_client(client)`
 
 Enrutador HTTP: decide que responder segun metodo + ruta. Se llama por cada
@@ -461,7 +487,7 @@ conexion aceptada.
   3. Rutas:
      | Metodo / ruta | Respuesta |
      |---|---|
-     | `GET /` | `send_response(..., HTML_PAGE)` (pagina embebida) |
+     | `GET /` | `send_file(..., INDEX_HTML)` (sirve `index.html` por streaming; `404` si falta) |
      | `GET /api/status` | `update_gyro()` + JSON de `status_payload()` |
      | `GET /api/debug` | `update_gyro()` + JSON de `debug_payload()` |
      | `POST /api/control` | parsea JSON; si falla `400`; si no `apply_command` + estado |
@@ -562,8 +588,8 @@ Punto de entrada. Orquesta el arranque y entra al bucle.
 `parse_request` -> `apply_command` (-> `start_quake`/`set_all_motors`/...) ->
 `status_payload` -> `send_response`.
 
-**Carga de la pagina:** navegador `GET /` -> `handle_client` -> `send_response`
-(pagina embebida `HTML_PAGE`).
+**Carga de la pagina:** navegador `GET /` -> `handle_client` -> `send_file`
+(streaming de `index.html` desde el sistema de ficheros).
 
 **Comando por UDP:** datagrama a `:5006` -> `run_event_loop` ->
 `handle_udp_command` -> `apply_command` -> respuesta unicast con `status_payload`.
